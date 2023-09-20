@@ -7,3 +7,8 @@ find pattern sin data, find correlation
 ask questions and find out the answers by plotting or any other techniques
 
 for plotting - use plotly
+
+conda env creation
+```bash
+conda create -p ./env python=3.10 -y
+```
