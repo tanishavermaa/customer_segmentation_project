@@ -1,4 +1,4 @@
-from src.ml.model.s3_estimator import CustomerClusterEstimator
+from src.ml.model.s3_estimator import S3Model
 from src.logger import logging
 from src.entity.config_entity import DataTransformationConfig , ModelTrainerConfig
 from src.constant.training_pipeline import *
@@ -57,6 +57,7 @@ class CustomerData:
 class PredictionPipeline:
     def __init__(self):
         self.utils = MainUtils()
+        self.s3_model = S3Model()
         
     def prepare_input_data(self, input_data:list) -> pd.DataFrame:
         """ 
@@ -87,11 +88,11 @@ class PredictionPipeline:
         
     
         
-    def get_trained_model(self, ModelTrainerConfig = ModelTrainerConfig):
+    def get_trained_model(self):
         """
         method: get_trained_model
         
-        objective: this method returns the model
+        objective: this method downloads the model from s3 and returns the model
 
         Args:
             ModelTrainerConfig
@@ -104,11 +105,9 @@ class PredictionPipeline:
         """
         try:
             prediction_config = PredictionPipelineConfig()
-            model = CustomerClusterEstimator(
-                bucket_name= prediction_config.model_bucket_name,
-                model_path= prediction_config.model_file_name
-            )
-                
+            model = self.s3_model.load_s3_model(prediction_config.model_store_dir)
+            
+            
             return model
                 
         except Exception as e:

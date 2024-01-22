@@ -1,3 +1,4 @@
+from src.ml.model.s3_estimator import S3Model
 from src.entity.config_entity import ModelEvaluationConfig
 from src.entity.artifact_entity import ModelTrainerArtifact, DataIngestionArtifact, ModelEvaluationArtifact, DataTransformationArtifact
 from sklearn.metrics import f1_score
@@ -10,7 +11,6 @@ import sys
 import pandas as pd
 
 
-from src.ml.model.s3_estimator import CustomerClusterEstimator
 from dataclasses import dataclass
 from typing import Optional
 from src.entity.config_entity import Prediction_config
@@ -46,18 +46,18 @@ class ModelEvaluation:
             self.data_ingestion_artifact = data_ingestion_artifact
             self.model_trainer_artifact = model_trainer_artifact
             self.data_transformation_artifact = data_transformation_artifact
+            
             self.utils = MainUtils()
+            self.s3_model = S3Model()
         except Exception as e:
             raise CustomerException(e, sys) from e
 
-    def get_best_model(self) -> Optional[CustomerClusterEstimator]:
+    def get_best_model(self):
         try:
-            bucket_name = self.model_eval_config.bucket_name
-            model_path = self.model_eval_config.s3_model_key_path
-            customer_cluster_estimator = CustomerClusterEstimator(bucket_name=bucket_name,
-                                               model_path=model_path)
+            
+            customer_cluster_estimator = self.s3_model.load_s3_model(self.model_eval_config.best_model_dir)
 
-            if customer_cluster_estimator.is_model_present(model_path=model_path):
+            if customer_cluster_estimator:
                 return customer_cluster_estimator
             return None
         except Exception as e:
@@ -66,15 +66,12 @@ class ModelEvaluation:
     def evaluate_model(self) -> EvaluateModelResponse:
         try:
             test_arr = load_numpy_array_data(file_path=self.data_transformation_artifact.transformed_test_file_path)
-            # x_test = pd.read_csv(self.data_ingestion_artifact.test_file_path)
             
-            x_test, y_test = pd.DataFrame(test_arr[:, :-1]), pd.DataFrame(test_arr[:, -1])
             x_test = convert_test_numpy_array_to_dataframe(array= test_arr[:, :-1])
+            y_test = test_arr[:, -1]
+
            
 
-            
-    
-          
             trained_model = self.utils.load_object(file_path=self.model_trainer_artifact.trained_model_file_path)
             # y.replace(TargetValueMapping().to_dict(), inplace=True)
             y_hat_trained_model = trained_model.predict(x_test)

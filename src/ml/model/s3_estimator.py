@@ -1,68 +1,97 @@
-from src.cloud_storage.aws_storage import SimpleStorageService
+# from src.cloud_storage.aws_syncer import S3Sync
+import os,sys
+import subprocess
+
+from src.cloud_storage.aws_storage import S3Sync
+from src.logger import logging as lg
 from src.exception import CustomerException
-from src.ml.model.estimator import CustomerSegmentationModel
-import sys
-from pandas import DataFrame
+from src.utils.main_utils import MainUtils
+from src.constant.training_pipeline import *
+from src.constant.s3_bucket import TRAINING_BUCKET_NAME
+from src.constant.training_pipeline import MODEL_FILE_NAME
 
 
+class S3Model:
 
-class CustomerClusterEstimator:
-    """
-    This class is used to save and retrieve src model in s3 bucket and to do prediction
-    """
+    def __init__(self) -> None:
+        self.s3_sync = S3Sync()
+        self.utils = MainUtils()
+    
+    def is_bucket_empty(self) -> bool:
 
-    def __init__(self,bucket_name,model_path,):
-        """
-        :param bucket_name: Name of your model bucket
-        :param model_path: Location of your model in bucket
-        """
-        self.bucket_name = bucket_name
-        self.s3 = SimpleStorageService()
-        self.model_path = model_path
-        self.loaded_model:CustomerSegmentationModel=None
+        command = f"""aws s3api list-objects-v2 --bucket {TRAINING_BUCKET_NAME} """
+        
+        output = subprocess.check_output(command, shell=True)
 
+        output = output.decode('utf-8').rstrip()
 
-    def is_model_present(self,model_path):
+        response = True if len(output) == 0 else False  
+
+        return response
+
+    def is_model_present(self) -> bool:
+
+        
+        if not self.is_bucket_empty():
+            command = f"""aws s3api list-objects-v2 --bucket {TRAINING_BUCKET_NAME} --query "contains(Contents[].Key, '{MODEL_TRAINER_TRAINED_MODEL_NAME}')" """
+          
+            output = subprocess.check_output(command, shell=True)
+
+            output = output.decode('utf-8').rstrip()
+
+            output = True if output=='true' else False
+        else:
+            output = False      
+        return output
+        
+    def save_model_to_local(self, model_path):
         try:
-            return self.s3.s3_key_path_available(bucket_name=self.bucket_name, s3_key=model_path)
+            self.s3_sync.sync_folder_from_s3(folder=model_path, aws_bucket_name=TRAINING_BUCKET_NAME)
         except Exception as e:
-            print(e)
-            return False
+            raise CustomerException(e,sys)
 
-    def load_model(self,)->CustomerSegmentationModel:
+    def load_s3_model(self, model_dir):
         """
-        Load the model from the model_path
-        :return:
-        """
+        params:
+        
+            model_dir : local dir to save the model
+            
 
-        return self.s3.load_model(self.model_path,bucket_name=self.bucket_name)
-
-    def save_model(self,from_file,remove:bool=False)->None:
-        """
-        Save the model to the model_path
-        :param from_file: Your local system model path
-        :param remove: By default it is false that mean you will have your model locally available in your system folder
-        :return:
         """
         
         try:
-            self.s3.upload_file(from_file,
-                                to_filename=self.model_path,
-                                bucket_name=self.bucket_name,
-                                remove=remove
-                                )
-        except Exception as e:
-            raise (e, sys)
-
-
-    def predict(self,dataframe:DataFrame):
-        """
-        :param dataframe:
-        :return:
-        """
-        try:
-            if self.loaded_model is None:
-                self.loaded_model = self.load_model()
-            return self.loaded_model.predict(dataframe)
+            is_model_present = self.is_model_present()
+            
+            if is_model_present:
+                self.save_model_to_local(model_dir)
+                model = self.utils.load_object(
+                    os.path.join(model_dir,
+                                 MODEL_FILE_NAME)
+                )
+            else:
+                model = None 
+            return model
         except Exception as e:
             raise CustomerException(e,sys)
+
+    def save_model_to_s3(self,model_dir, remove_existing_model = True):
+        
+        """
+        params:
+            model_dir : local dir where the model is saved
+        """
+
+        try:
+            if remove_existing_model:
+                command = f"aws s3 rm s3://{TRAINING_BUCKET_NAME}/{MODEL_TRAINER_TRAINED_MODEL_NAME}"
+                os.system(command)
+                lg.info("existing model is removed")
+            self.s3_sync.sync_folder_to_s3(folder=model_dir, aws_buket_name= TRAINING_BUCKET_NAME)
+
+        except Exception as e:
+            raise CustomerException(e,sys)
+    
+
+
+
+
