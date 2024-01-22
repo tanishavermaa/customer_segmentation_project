@@ -135,6 +135,7 @@ dmypy.json
 .pyre/
 Untitled.ipynb
 artifact
+prediction_artifacts
 
 #local fine
 test.ipynb

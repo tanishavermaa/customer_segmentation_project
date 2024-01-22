@@ -103,7 +103,7 @@ async def predictGetRouteClient(request: Request):
 
         return templates.TemplateResponse(
             "customer.html",
-            {"request": request, "context": "Rendering"},
+            {"request": request, "context": None},
         )
 
     except Exception as e:
@@ -146,7 +146,7 @@ async def predictRouteClient(request: Request):
 
         # predicted_cluster = model_predictor.predict(customer_data_df)
         return templates.TemplateResponse(
-            "customer.html",
+            "result.html",
             {"request": request, "context": int(predicted_cluster[0])}
         )
 
